@@ -9,6 +9,8 @@ export default function Sidebar() {
   const setSearch = useStore((s) => s.setSearch)
   const setCategory = useStore((s) => s.setCategory)
   const selectBone = useStore((s) => s.selectBoneAndFly)
+  const sidebarOpen = useStore((s) => s.sidebarOpen)
+  const closePanels = useStore((s) => s.closePanels)
 
   // 先按分类筛选，再按搜索词筛选
   const filteredBones = useMemo(() => {
@@ -26,7 +28,7 @@ export default function Sidebar() {
   }, [activeCategory, searchQuery])
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
       {/* 搜索框 */}
       <div className="sidebar-search">
         <input
@@ -70,7 +72,7 @@ export default function Sidebar() {
           <div
             key={bone.id}
             className={`bone-list-item ${selectedBone === bone.id ? 'selected' : ''}`}
-            onClick={() => selectBone(bone.id)}
+            onClick={() => { selectBone(bone.id); closePanels() }}
           >
             <span className="bone-list-name-zh">{bone.nameZh}</span>
             <span className="bone-list-name-en">{bone.nameEn}</span>

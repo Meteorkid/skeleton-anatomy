@@ -1,27 +1,25 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import useStore from '../store/useStore'
 import { bones, getBoneById, boneCategories } from '../data/boneData'
 
-// 测验模式面板
 export default function QuizPanel() {
   const quizMode = useStore((s) => s.quizMode)
   const quizBone = useStore((s) => s.quizBone)
-  const quizAnswer = useStore((s) => s.quizAnswer)
   const quizResult = useStore((s) => s.quizResult)
+  const quizScore = useStore((s) => s.quizScore)
   const setQuizBone = useStore((s) => s.setQuizBone)
-  const setQuizAnswer = useStore((s) => s.setQuizAnswer)
   const setQuizResult = useStore((s) => s.setQuizResult)
   const selectBoneAndFly = useStore((s) => s.selectBoneAndFly)
   const stopQuiz = useStore((s) => s.stopQuiz)
+  const updateQuizScore = useStore((s) => s.updateQuizScore)
+  const resetQuizScore = useStore((s) => s.resetQuizScore)
 
-  const [score, setScore] = useState({ correct: 0, total: 0 })
   const [showHint, setShowHint] = useState(false)
   const [inputValue, setInputValue] = useState('')
 
   const bone = quizBone ? getBoneById(quizBone) : null
   const category = bone ? boneCategories.find((c) => c.id === bone.category) : null
 
-  // 随机选一块骨头
   const pickRandomBone = () => {
     const randomBone = bones[Math.floor(Math.random() * bones.length)]
     setQuizBone(randomBone.id)
@@ -35,7 +33,6 @@ export default function QuizPanel() {
     }
   }, [quizMode, quizBone])
 
-  // 提交答案
   const handleSubmit = () => {
     if (!bone || !inputValue.trim()) return
     const ans = inputValue.trim().toLowerCase()
@@ -45,21 +42,14 @@ export default function QuizPanel() {
       ans === bone.id.toLowerCase()
 
     setQuizResult(isCorrect ? 'correct' : 'wrong')
-    setScore((prev) => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      total: prev.total + 1,
-    }))
-
-    // 高亮显示这块骨骼
+    updateQuizScore(isCorrect)
     selectBoneAndFly(bone.id)
   }
 
-  // 下一题
   const handleNext = () => {
     pickRandomBone()
   }
 
-  // 回车提交
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       if (quizResult) {
@@ -77,8 +67,14 @@ export default function QuizPanel() {
       <div className="quiz-header">
         <h3>骨骼测验</h3>
         <div className="quiz-score">
-          {score.correct} / {score.total}
+          {quizScore.correct} / {quizScore.total}
+          {quizScore.total > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>
+              ({Math.round(quizScore.correct / quizScore.total * 100)}%)
+            </span>
+          )}
         </div>
+        <button className="quiz-close" onClick={resetQuizScore} title="重置分数">↺</button>
         <button className="quiz-close" onClick={stopQuiz}>✕</button>
       </div>
 
@@ -86,23 +82,21 @@ export default function QuizPanel() {
         <>
           <div className="quiz-question">
             <p>请说出这块骨骼的名称：</p>
-            {bone && (
-              <div className="quiz-hint-area">
-                <button
-                  className="quiz-hint-btn"
-                  onClick={() => setShowHint(!showHint)}
-                >
-                  {showHint ? '隐藏提示' : '显示提示'}
-                </button>
-                {showHint && (
-                  <div className="quiz-hint">
-                    <p>分类：{category?.name}</p>
-                    <p>编号：{bone.id}</p>
-                    <p>描述：{bone.descriptionZh.slice(0, 30)}...</p>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="quiz-hint-area">
+              <button
+                className="quiz-hint-btn"
+                onClick={() => setShowHint(!showHint)}
+              >
+                {showHint ? '隐藏提示' : '显示提示'}
+              </button>
+              {showHint && (
+                <div className="quiz-hint">
+                  <p>分类：{category?.name}</p>
+                  <p>编号：{bone.id}</p>
+                  <p>描述：{bone.descriptionZh.slice(0, 30)}...</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="quiz-input-area">
@@ -115,11 +109,11 @@ export default function QuizPanel() {
               disabled={!!quizResult}
               autoFocus
             />
-            {!quizResult ? (
+            {!quizResult && (
               <button className="quiz-submit" onClick={handleSubmit}>
                 提交
               </button>
-            ) : null}
+            )}
           </div>
 
           {quizResult && (

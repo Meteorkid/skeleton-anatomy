@@ -5,10 +5,15 @@ import SkeletonModel from './SkeletonModel'
 import CameraController from './CameraController'
 import useStore from '../store/useStore'
 
+const DARK_BG = '#1a1a2e'
+const LIGHT_BG = '#e8e0d8'
+
 function Loader() {
+  const theme = useStore((s) => s.theme)
+  const textColor = theme === 'dark' ? '#e8dcc8' : '#2a2520'
   return (
     <Html center>
-      <div style={{ color: '#e8dcc8', fontSize: 18, textAlign: 'center' }}>
+      <div style={{ color: textColor, fontSize: 18, textAlign: 'center' }}>
         <div style={{ marginBottom: 8 }}>加载骨骼模型中...</div>
         <div style={{
           width: 200,
@@ -32,11 +37,12 @@ function Loader() {
 
 export default function Canvas3D() {
   const selectBone = useStore((s) => s.selectBone)
+  const theme = useStore((s) => s.theme)
 
   return (
     <Canvas
       camera={{ position: [0, 3, 6], fov: 50 }}
-      style={{ background: '#1a1a2e' }}
+      style={{ background: theme === 'dark' ? DARK_BG : LIGHT_BG }}
       onPointerMissed={() => selectBone(null)}
     >
       {/* 三点光照 */}

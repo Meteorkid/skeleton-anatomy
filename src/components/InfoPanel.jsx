@@ -3,6 +3,7 @@ import { getBoneById, boneCategories } from '../data/boneData'
 
 export default function InfoPanel() {
   const selectedBone = useStore((s) => s.selectedBone)
+  const infoPanelOpen = useStore((s) => s.infoPanelOpen)
   const bone = selectedBone ? getBoneById(selectedBone) : null
   const category = bone
     ? boneCategories.find((c) => c.id === bone.category)
@@ -10,7 +11,7 @@ export default function InfoPanel() {
 
   if (!bone) {
     return (
-      <div className="info-panel">
+      <div className={`info-panel ${infoPanelOpen ? 'open' : ''}`}>
         <div className="info-placeholder">
           <div className="info-icon">🦴</div>
           <h3>点击任意骨骼查看详情</h3>
@@ -21,7 +22,7 @@ export default function InfoPanel() {
   }
 
   return (
-    <div className="info-panel">
+    <div className={`info-panel ${infoPanelOpen ? 'open' : ''}`}>
       <div className="info-header">
         <span className="info-category-badge">
           {category?.name || bone.category}

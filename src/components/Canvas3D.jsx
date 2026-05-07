@@ -1,9 +1,12 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, ContactShadows, Html } from '@react-three/drei'
+import { OrbitControls, ContactShadows, Html, useGLTF } from '@react-three/drei'
 import SkeletonModel from './SkeletonModel'
 import CameraController from './CameraController'
 import useStore from '../store/useStore'
+
+// 预加载 GLB 模型
+useGLTF.preload('/models/skeletal_system.glb')
 
 const DARK_BG = '#1a1a2e'
 const LIGHT_BG = '#e8e0d8'

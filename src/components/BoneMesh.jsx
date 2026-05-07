@@ -2,7 +2,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import useStore from '../store/useStore'
 
-// 单块骨骼 mesh 组件：支持点击选中、悬停高亮
+// 单块骨骼 mesh 组件：透明点击靶区，选中/悬停时显示高亮
 export default function BoneMesh({ boneId, geometry, position = [0, 0, 0], scale = 1 }) {
   const meshRef = useRef()
   const selectedBone = useStore((s) => s.selectedBone)
@@ -12,11 +12,7 @@ export default function BoneMesh({ boneId, geometry, position = [0, 0, 0], scale
 
   const isSelected = selectedBone === boneId
   const isHovered = hoveredBone === boneId
-
-  // 颜色：选中=暖橙色，悬停=浅橙色，默认=骨白色
-  const color = isSelected ? '#ff6b35' : isHovered ? '#ffb088' : '#e8dcc8'
-  const emissive = isSelected ? '#ff6b35' : isHovered ? '#ff8855' : '#000000'
-  const emissiveIntensity = isSelected ? 0.4 : isHovered ? 0.15 : 0
+  const isActive = isSelected || isHovered
 
   // 选中骨骼的呼吸动画
   useFrame((_, delta) => {
@@ -49,12 +45,15 @@ export default function BoneMesh({ boneId, geometry, position = [0, 0, 0], scale
       }}
     >
       <meshStandardMaterial
-        color={color}
-        emissive={emissive}
-        emissiveIntensity={emissiveIntensity}
+        transparent
+        opacity={isActive ? 0.3 : 0}
+        color={isSelected ? '#ff6b35' : '#ff8855'}
+        emissive={isSelected ? '#ff6b35' : isHovered ? '#ff8855' : '#000000'}
+        emissiveIntensity={isSelected ? 0.6 : isHovered ? 0.3 : 0}
         roughness={0.55}
         metalness={0.05}
-        side={2} // DoubleSide
+        depthWrite={false}
+        side={2}
       />
     </mesh>
   )

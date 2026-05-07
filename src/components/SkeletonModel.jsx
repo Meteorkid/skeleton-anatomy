@@ -1,13 +1,44 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import BoneMesh from './BoneMesh'
 import { bones } from '../data/boneData'
 import { getBonePositions } from '../utils/bonePositions'
+import useStore from '../store/useStore'
 
 const bonePositions = getBonePositions()
 
-export default function SkeletonModel() {
-  // 为每块骨骼创建几何体
+// GLB 骨骼模型（视觉展示）
+function GLBSkeleton() {
+  const { scene } = useGLTF('/models/skeletal_system.glb')
+  const theme = useStore((s) => s.theme)
+  const ref = useRef()
+
+  const cloned = useMemo(() => {
+    const clone = scene.clone(true)
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.material = child.material.clone()
+        child.material.color = new THREE.Color(theme === 'dark' ? '#e8dcc8' : '#d4c8b0')
+        child.material.roughness = 0.6
+        child.material.metalness = 0.05
+        child.material.emissive = new THREE.Color('#000000')
+        child.material.emissiveIntensity = 0
+        child.castShadow = true
+        child.receiveShadow = true
+        // GLB mesh 不响应点击事件，由程序化几何体处理
+        child.raycast = () => {}
+      }
+    })
+    return clone
+  }, [scene, theme])
+
+  return <primitive ref={ref} object={cloned} scale={1} position={[0, 0, 0]} />
+}
+
+// 程序化几何体（透明点击靶区，保留逐骨交互）
+function ProceduralBones() {
   const boneGeometries = useMemo(() => {
     const geos = {}
     for (const bone of bones) {
@@ -74,6 +105,15 @@ export default function SkeletonModel() {
           />
         )
       })}
+    </group>
+  )
+}
+
+export default function SkeletonModel() {
+  return (
+    <group>
+      <GLBSkeleton />
+      <ProceduralBones />
     </group>
   )
 }

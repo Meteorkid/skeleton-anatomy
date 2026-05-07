@@ -1,0 +1,336 @@
+/* ========== 全局样式 ========== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  background: #0f0f1a;
+  color: #e8dcc8;
+  overflow: hidden;
+  height: 100vh;
+}
+
+#root {
+  height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ========== 顶部标题栏 ========== */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 1px solid rgba(255, 107, 53, 0.2);
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ff6b35;
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.app-subtitle {
+  font-size: 13px;
+  color: rgba(232, 220, 200, 0.5);
+}
+
+/* ========== 主体三栏布局 ========== */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ========== 左侧栏 ========== */
+.sidebar {
+  width: 280px;
+  background: #141425;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-search {
+  padding: 12px;
+  position: relative;
+}
+
+.sidebar-search input {
+  width: 100%;
+  padding: 10px 32px 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e8dcc8;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.sidebar-search input:focus {
+  border-color: #ff6b35;
+}
+
+.sidebar-search input::placeholder {
+  color: rgba(232, 220, 200, 0.35);
+}
+
+.search-clear {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: rgba(232, 220, 200, 0.5);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+}
+
+.search-clear:hover {
+  color: #ff6b35;
+}
+
+/* ========== 分类按钮 ========== */
+.sidebar-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.category-btn {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: rgba(232, 220, 200, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.category-btn:hover {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: rgba(255, 107, 53, 0.3);
+  color: #e8dcc8;
+}
+
+.category-btn.active {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  color: #ff6b35;
+}
+
+/* ========== 骨骼列表 ========== */
+.sidebar-bone-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px;
+}
+
+.sidebar-bone-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-bone-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-bone-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.bone-list-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: rgba(232, 220, 200, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.bone-list-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  margin: 1px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bone-list-item:hover {
+  background: rgba(255, 107, 53, 0.08);
+}
+
+.bone-list-item.selected {
+  background: rgba(255, 107, 53, 0.15);
+  border-left: 3px solid #ff6b35;
+}
+
+.bone-list-name-zh {
+  font-size: 14px;
+  color: #e8dcc8;
+  font-weight: 500;
+}
+
+.bone-list-name-en {
+  font-size: 11px;
+  color: rgba(232, 220, 200, 0.4);
+  margin-top: 2px;
+}
+
+.bone-list-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: rgba(232, 220, 200, 0.3);
+  font-size: 13px;
+}
+
+/* ========== 3D 画布 ========== */
+.canvas-container {
+  flex: 1;
+  position: relative;
+}
+
+/* ========== 右侧信息面板 ========== */
+.info-panel {
+  width: 320px;
+  background: #141425;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.info-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.info-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.info-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.info-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.info-placeholder h3 {
+  font-size: 16px;
+  color: rgba(232, 220, 200, 0.6);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.info-placeholder p {
+  font-size: 12px;
+  color: rgba(232, 220, 200, 0.3);
+  line-height: 1.8;
+}
+
+.info-header {
+  padding: 20px 20px 0;
+}
+
+.info-category-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(255, 107, 53, 0.15);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #ff6b35;
+}
+
+.info-bone-name-zh {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e8dcc8;
+  padding: 16px 20px 4px;
+}
+
+.info-bone-name-en {
+  font-size: 16px;
+  color: rgba(232, 220, 200, 0.5);
+  padding: 0 20px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.info-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.info-section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(232, 220, 200, 0.35);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.info-section p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(232, 220, 200, 0.8);
+}
+
+.info-desc-en {
+  font-size: 13px !important;
+  color: rgba(232, 220, 200, 0.5) !important;
+  font-style: italic;
+}
+
+.info-id {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px !important;
+  color: rgba(255, 107, 53, 0.6) !important;
+  background: rgba(255, 107, 53, 0.08);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* ========== 加载动画 ========== */
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; width: 30%; }
+  50% { opacity: 1; width: 80%; }
+}

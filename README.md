@@ -1,3 +1,5 @@
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL%20v3-red)](./LICENSE)
+
 # 人体骨骼 3D 图谱
 
 Human Skeleton 3D Atlas — 交互式人体骨骼解剖学习应用

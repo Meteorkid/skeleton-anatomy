@@ -64,7 +64,7 @@ async function main() {
   })
   const page = await browser.newPage()
   await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
-  await page.waitForFunction(() => window.__debugBonePositions && window.__findFootBone, { timeout: 15000 })
+  await page.waitForFunction(() => window.__debugBonePositions && window.__findFootBone && window.__findTorsoBone, { timeout: 15000 })
   await page.waitForTimeout(1000)
 
   // 测试 1: v4 算法正确性（骨骼中心位置作为输入）
@@ -81,6 +81,10 @@ async function main() {
       if (!detected) {
         const footBone = window.__findFootBone(point)
         if (footBone) detected = footBone
+      }
+      if (!detected) {
+        const torsoBone = window.__findTorsoBone(point)
+        if (torsoBone) detected = torsoBone
       }
       if (!detected) {
         const bones = Object.entries(bonePositions).map(([id2, b]) => ({
@@ -177,6 +181,10 @@ async function main() {
           if (footBone) detected = footBone
         }
         if (!detected) {
+          const torsoBone = window.__findTorsoBone(clickPoint)
+          if (torsoBone) detected = torsoBone
+        }
+        if (!detected) {
           let best = null, bestDist = Infinity
           let second = null, secondDist = Infinity, secondSize = 0
           for (const b of boneLookup) {
@@ -244,6 +252,8 @@ async function main() {
         if (fingerBone) return { detected: fingerBone, path: 'finger' }
         const footBone = window.__findFootBone(clickPoint)
         if (footBone) return { detected: footBone, path: 'foot' }
+        const torsoBone = window.__findTorsoBone(clickPoint)
+        if (torsoBone) return { detected: torsoBone, path: 'torso' }
         let best = null, bestDist = Infinity
         let second = null, secondDist = Infinity, secondSize = 0
         for (const b of boneLookup) {

@@ -348,6 +348,27 @@ function findFootBone(worldPoint) {
 // 暴露到 window 用于测试
 if (typeof window !== 'undefined') window.__findFootBone = findFootBone
 
+// 躯干/颅骨区域检测 — 处理 mesh 表面共享导致全局匹配误判的骨骼
+function findTorsoBone(worldPoint) {
+  const absX = Math.abs(worldPoint.x)
+  const y = worldPoint.y
+  const z = worldPoint.z
+
+  // 胸骨：前胸壁中线（Y 4.35-5.30 排除 t8 Y≈4.20），Z 显著靠前区别于后方椎骨
+  if (absX < 0.12 && y > 4.35 && y < 5.30 && z > 0.20) return 'sternum'
+
+  // 额骨：前颅顶中线，X≈0 区别于颞骨（X≈±0.19, Z≈0.04）
+  if (absX < 0.10 && y > 6.0 && y < 6.3 && z > 0.10) return 'frontal'
+
+  // 下颌骨：下颚最低位（Y 5.42-5.50），区别于腭骨（Y 5.52）和舌骨（Y 5.39）
+  if (absX < 0.12 && y > 5.42 && y < 5.50 && z > 0.15) return 'mandible'
+
+  return null
+}
+
+// 暴露到 window 用于测试
+if (typeof window !== 'undefined') window.__findTorsoBone = findTorsoBone
+
 // 查找最近的骨骼（世界坐标命中点）
 // 距离接近时（<0.04），偏向更小的骨骼（大骨骼的 mesh 往往包裹小骨骼）
 function findNearestBone(worldPoint, maxDist) {
@@ -511,7 +532,7 @@ function GLBSkeleton() {
     }
   }, [camera])
 
-  // GLB 点击 → 手指检测 → 足部检测 → 全局匹配
+  // GLB 点击 → 手指 → 足部 → 躯干 → 全局匹配
   const handleClick = useCallback(
     (e) => {
       e.stopPropagation()
@@ -526,6 +547,11 @@ function GLBSkeleton() {
       const footBone = findFootBone(e.point)
       if (footBone) {
         selectBone(footBone)
+        return
+      }
+      const torsoBone = findTorsoBone(e.point)
+      if (torsoBone) {
+        selectBone(torsoBone)
         return
       }
       const nearest = findNearestBone(e.point, 1.2)
@@ -550,6 +576,12 @@ function GLBSkeleton() {
       const footBone = findFootBone(e.point)
       if (footBone) {
         setHovered(footBone)
+        document.body.style.cursor = 'pointer'
+        return
+      }
+      const torsoBone = findTorsoBone(e.point)
+      if (torsoBone) {
+        setHovered(torsoBone)
         document.body.style.cursor = 'pointer'
         return
       }

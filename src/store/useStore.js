@@ -43,8 +43,11 @@ const useStore = create((set) => ({
     selectedBone: state.selectedBone === id ? null : id,
   })),
 
-  // 从列表选择骨骼，同时触发相机飞行
-  selectBoneAndFly: (id) => set({ selectedBone: id, flyToTarget: id }),
+  // 从列表/3D 点击选择骨骼，同时触发相机飞行；已选中时只取消选中不飞行
+  selectBoneAndFly: (id) => set((state) => {
+    if (state.selectedBone === id) return { selectedBone: null }
+    return { selectedBone: id, flyToTarget: id }
+  }),
   clearFlyTarget: () => set({ flyToTarget: null }),
 
   setHovered: (id) => set({ hoveredBone: id }),

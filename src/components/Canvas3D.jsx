@@ -1,6 +1,7 @@
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Html, useGLTF } from '@react-three/drei'
+import * as THREE from 'three'
 import SkeletonModel from './SkeletonModel'
 import CameraController from './CameraController'
 import useStore from '../store/useStore'
@@ -41,10 +42,11 @@ function Loader() {
 export default function Canvas3D() {
   const selectBone = useStore((s) => s.selectBone)
   const theme = useStore((s) => s.theme)
+  const controlsRef = useRef()
 
   return (
     <Canvas
-      camera={{ position: [0, 3, 6], fov: 50 }}
+      camera={{ position: [0, 2.2, 14], fov: 50 }}
       style={{ background: theme === 'dark' ? DARK_BG : LIGHT_BG }}
       onPointerMissed={() => selectBone(null)}
     >
@@ -56,24 +58,38 @@ export default function Canvas3D() {
 
       <Suspense fallback={<Loader />}>
         <SkeletonModel />
-        <CameraController />
+        <CameraController controlsRef={controlsRef} />
         <ContactShadows
-          position={[0, -1.2, 0]}
+          position={[0, -2.1, 0]}
           opacity={0.4}
-          scale={10}
+          scale={15}
           blur={2}
           far={4}
         />
       </Suspense>
 
       <OrbitControls
+        ref={controlsRef}
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
-        minDistance={2}
-        maxDistance={15}
-        target={[0, 3, 0]}
+        minDistance={1.5}
+        maxDistance={25}
+        target={[0, 2.2, 0]}
         autoRotate={false}
+        rotateSpeed={1.2}
+        zoomSpeed={1.2}
+        panSpeed={0.8}
+        dampingFactor={0.08}
+        mouseButtons={{
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN,
+        }}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        }}
       />
     </Canvas>
   )

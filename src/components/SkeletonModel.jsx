@@ -5,22 +5,9 @@ import * as THREE from 'three'
 import useStore from '../store/useStore'
 import { bones } from '../data/boneData'
 import { getBonePositions } from '../utils/bonePositions'
+import { boneLookup } from '../utils/boneColorMap'
 
 const bonePositions = getBonePositions()
-
-// 预计算骨骼位置的快速查找结构（世界坐标系）
-const boneLookup = bones
-  .filter((b) => bonePositions[b.id])
-  .map((b) => ({
-    id: b.id,
-    px: bonePositions[b.id].p[0],
-    py: bonePositions[b.id].p[1],
-    pz: bonePositions[b.id].p[2],
-    get size() {
-      const s = bonePositions[b.id].s
-      return Array.isArray(s) ? Math.max(...s) : s
-    },
-  }))
 
 // 手指骨骼段定义 — 每段有独立的 X/Y/Z（与 bonePositions.js 对应）
 // findFingerBone 用 3D 距离做综合判断
@@ -243,6 +230,61 @@ function buildFaceToFingerMap(mesh) {
   return map
 }
 
+// 构建三角面→骨骼映射表（所有 206 块骨骼，faceIndex 直接查表）
+// 使用启发式检测管线对每个三角面质心做骨骼识别，缓存结果
+function buildFaceToBoneMap(mesh) {
+  const geo = mesh.geometry
+  const pos = geo.attributes.position
+  const idx = geo.index
+
+  const faceCount = idx ? idx.count / 3 : pos.count / 3
+  const map = new Array(faceCount)
+
+  mesh.updateWorldMatrix(true, false)
+  const wm = mesh.matrixWorld
+
+  const v0 = new THREE.Vector3()
+  const v1 = new THREE.Vector3()
+  const v2 = new THREE.Vector3()
+  const c = new THREE.Vector3()
+
+  for (let i = 0; i < faceCount; i++) {
+    let i0, i1, i2
+    if (idx) {
+      i0 = idx.getX(i * 3)
+      i1 = idx.getX(i * 3 + 1)
+      i2 = idx.getX(i * 3 + 2)
+    } else {
+      i0 = i * 3
+      i1 = i * 3 + 1
+      i2 = i * 3 + 2
+    }
+
+    v0.set(pos.getX(i0), pos.getY(i0), pos.getZ(i0))
+    v1.set(pos.getX(i1), pos.getY(i1), pos.getZ(i1))
+    v2.set(pos.getX(i2), pos.getY(i2), pos.getZ(i2))
+
+    c.set(
+      (v0.x + v1.x + v2.x) / 3,
+      (v0.y + v1.y + v2.y) / 3,
+      (v0.z + v1.z + v2.z) / 3
+    )
+    c.applyMatrix4(wm)
+
+    // 运行完整检测管线
+    const fingerBone = findFingerBone(c, null)
+    if (fingerBone) { map[i] = fingerBone; continue }
+    const footBone = findFootBone(c)
+    if (footBone) { map[i] = footBone; continue }
+    const torsoBone = findTorsoBone(c)
+    if (torsoBone) { map[i] = torsoBone; continue }
+    const nearest = findNearestBone(c, 1.2)
+    map[i] = nearest ? nearest.id : null
+  }
+
+  return map
+}
+
 // 足部射线定义（左足镜像，右足 X 为负）
 // 每条射线对应一个趾列：bigtoe(拇指侧), toe2, toe3, toe4, toe5(小指侧)
 const footRays = [
@@ -437,6 +479,10 @@ function GLBSkeleton() {
       ref.current.traverse((c) => { if (c.isMesh) meshes.push(c) })
       if (meshes.length > 0) {
         window.__faceToFingerMap = buildFaceToFingerMap(meshes[0])
+
+        // ---- Face-to-Bone 映射表（所有骨骼的快速三角面查表）----
+        window.__faceToBoneMap = buildFaceToBoneMap(meshes[0])
+        window.__faceToBoneTotalFaces = window.__faceToBoneMap.length
       }
 
       // 验证函数：对每个骨骼位置做射线检测，计算到模型表面的最近距离
@@ -532,10 +578,21 @@ function GLBSkeleton() {
     }
   }, [camera])
 
-  // GLB 点击 → 手指 → 足部 → 躯干 → 全局匹配
+  // GLB 点击 → face-to-bone 查表 → 启发式管线兜底
   const handleClick = useCallback(
     (e) => {
       e.stopPropagation()
+
+      // 优先使用 face-to-bone 映射表（O(1) 查表）
+      if (e.faceIndex != null && window.__faceToBoneMap) {
+        const boneId = window.__faceToBoneMap[e.faceIndex]
+        if (boneId) {
+          selectBone(boneId)
+          return
+        }
+      }
+
+      // 回退到启发式检测管线
       const knownFinger = e.faceIndex != null && window.__faceToFingerMap
         ? window.__faceToFingerMap[e.faceIndex]
         : null

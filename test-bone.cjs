@@ -64,7 +64,7 @@ async function main() {
   })
   const page = await browser.newPage()
   await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
-  await page.waitForFunction(() => window.__debugBonePositions && window.__findFootBone && window.__findTorsoBone, { timeout: 15000 })
+  await page.waitForFunction(() => window.__debugBonePositions && window.__findFootBone && window.__findTorsoBone && window.__faceToBoneMap, { timeout: 15000 })
   await page.waitForTimeout(1000)
 
   // 测试 1: v4 算法正确性（骨骼中心位置作为输入）
@@ -214,6 +214,61 @@ async function main() {
     }
     return results
   }, { boneIds: BONES, K })
+
+  // 测试 3: face-to-bone 映射表正确性（骨骼中心 → 最近三角面质心 → 查表）
+  const faceMapResults = await page.evaluate((boneIds) => {
+    if (!window.__faceToBoneMap) return { error: '__faceToBoneMap not available' }
+    const bonePositions = window.__debugBonePositions
+    const THREE = window.__debugTHREE
+    const group = window.__debugGLBGroup
+    const meshes = []
+    group.traverse(c => { if (c.isMesh) meshes.push(c) })
+    const mesh = meshes[0]
+    const pos = mesh.geometry.attributes.position
+    const idx = mesh.geometry.index
+    const wm = mesh.matrixWorld
+    const faceCount = idx ? idx.count / 3 : pos.count / 3
+    const faceMap = window.__faceToBoneMap
+    const v0 = new THREE.Vector3(), v1 = new THREE.Vector3(), v2 = new THREE.Vector3()
+    const c = new THREE.Vector3()
+
+    // 预计算所有三角面质心（世界坐标）
+    const centroids = []
+    for (let i = 0; i < faceCount; i++) {
+      const i0 = idx ? idx.getX(i * 3) : i * 3
+      const i1 = idx ? idx.getX(i * 3 + 1) : i * 3 + 1
+      const i2 = idx ? idx.getX(i * 3 + 2) : i * 3 + 2
+      v0.set(pos.getX(i0), pos.getY(i0), pos.getZ(i0))
+      v1.set(pos.getX(i1), pos.getY(i1), pos.getZ(i1))
+      v2.set(pos.getX(i2), pos.getY(i2), pos.getZ(i2))
+      c.set((v0.x+v1.x+v2.x)/3, (v0.y+v1.y+v2.y)/3, (v0.z+v1.z+v2.z)/3)
+      c.applyMatrix4(wm)
+      centroids.push({ x: c.x, y: c.y, z: c.z })
+    }
+
+    const results = []
+    for (const id of boneIds) {
+      const bp = bonePositions[id]
+      if (!bp) { results.push({ id, detected: 'NO_POS', pass: false }); continue }
+
+      // 找最近的三角面质心
+      let bestFace = -1, bestDist = Infinity
+      for (let i = 0; i < centroids.length; i++) {
+        const dx = centroids[i].x - bp.p[0]
+        const dy = centroids[i].y - bp.p[1]
+        const dz = centroids[i].z - bp.p[2]
+        const d = Math.sqrt(dx*dx + dy*dy + dz*dz)
+        if (d < bestDist) { bestDist = d; bestFace = i }
+      }
+
+      const detected = faceMap[bestFace]
+      results.push({
+        id, detected: detected || 'NONE', pass: detected === id,
+        faceDist: bestDist.toFixed(4), faceIdx: bestFace
+      })
+    }
+    return results
+  }, BONES)
 
   // 增强诊断：对 v2 失败的骨骼，分析最近顶点为何误检
   const v2fDiag = v2Results.filter(r => !r.pass).map(r => r.id)
@@ -383,6 +438,25 @@ async function main() {
     console.log(`\n失败分类: 足部=${foot.length} 手指=${finger.length} 其他=${other.length}`)
     console.log('失败详情:')
     for (const f of v2f) console.log(`  ${f.id} → ${f.detected}  (vDist: ${f.vDist})`)
+  }
+
+  // 输出 face-to-bone 映射表结果
+  if (faceMapResults.error) {
+    console.log(`\n===== face-to-bone 映射表 =====`)
+    console.log(`错误: ${faceMapResults.error}`)
+  } else {
+    const fmp = faceMapResults.filter(r => r.pass).length
+    const fmf = faceMapResults.filter(r => !r.pass)
+    console.log(`\n===== face-to-bone 映射表（骨骼中心 → 最近面质心 → 查表）=====`)
+    console.log(`总计: ${faceMapResults.length} | 通过: ${fmp} | 失败: ${fmf.length} | 通过率: ${(fmp/faceMapResults.length*100).toFixed(1)}%`)
+    if (fmf.length > 0) {
+      const foot = fmf.filter(f => f.id.match(/(toe|mt|cuneiform|talus|calcaneus|navicular|cuboid)/))
+      const finger = fmf.filter(f => f.id.match(/(thumb|index|middle|ring|pinky)/))
+      const other = fmf.filter(f => !foot.includes(f) && !finger.includes(f))
+      console.log(`分类: 足部=${foot.length} 手指=${finger.length} 其他=${other.length}`)
+      console.log('失败详情（前20）:')
+      for (const f of fmf.slice(0, 20)) console.log(`  ${f.id} → ${f.detected}  (faceDist: ${f.faceDist})`)
+    }
   }
 }
 

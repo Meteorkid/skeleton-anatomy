@@ -69,9 +69,10 @@ function findFingerBone(worldPoint, knownFinger = null) {
     }
   }
 
-  // 同 blob 手指：face map 不可靠，用 Y 阈值区分
+  // 同 blob 手指：face map 不可靠，用 X/Y 阈值区分
   const isSameBlob = (bestFinger === 'index' || bestFinger === 'middle') ||
-                     (bestFinger === 'ring' || bestFinger === 'pinky')
+                     (bestFinger === 'ring' || bestFinger === 'pinky') ||
+                     (bestFinger === 'middle' || bestFinger === 'ring')
   if (isSameBlob) {
     bestFinger = disambiguateSameBlob(absX, worldPoint.y, worldPoint.z, bestFinger, secondFinger, bestDist, secondDist)
     // 重新计算 bestSeg
@@ -153,6 +154,17 @@ function disambiguateSameBlob(absX, y, hitZ, bestFinger, secondFinger, bestDist,
       // DP: ring X=1.42, pinky X=1.40 → 阈值 1.41
       const xThreshold = y > 1.70 ? 1.36 : 1.41
       return absX > xThreshold ? 'ring' : 'pinky'
+    }
+  }
+
+  // middle vs ring: PP 用 Y，MP/DP 用 X 阈值（middle X=1.44, ring X=1.38/1.42）
+  if ((bestFinger === 'middle' || bestFinger === 'ring') && (secondFinger === 'middle' || secondFinger === 'ring')) {
+    if (absX > 1.36 && absX < 1.48 && secondDist - bestDist < 0.04) {
+      if (y > 1.80) return 'middle'  // PP 级别: middle Y=1.81, ring Y=1.79
+      // MP: middle X=1.44, ring X=1.38 → 阈值 1.41
+      // DP: middle X=1.44, ring X=1.42 → 阈值 1.43
+      const xThreshold = y > 1.69 ? 1.41 : 1.43
+      return absX > xThreshold ? 'middle' : 'ring'
     }
   }
 
@@ -293,21 +305,15 @@ function findFootBone(worldPoint) {
   // 跟骨（Y ≈ -1.02, 排除趾骨区域）
   if (y < -1.0 && y > -1.6 && absX > 0.25 && absX < 0.38) return `calcaneus_${hand}`
 
-  // 跖骨区域（Y ≈ -0.89）
-  if (y > -0.93 && y < -0.85) {
-    let bestRay = null, bestRayDist = Infinity
-    for (const ray of footRays) {
-      const d = Math.abs(absX - ray.x)
-      if (d < bestRayDist) { bestRayDist = d; bestRay = ray }
-    }
-    if (bestRay && bestRayDist < 0.06) return `${bestRay.mc}_${hand}`
-  }
+  // 跗骨 + 跖骨区域：跗骨（Y≈-0.82）在前，跖骨（Y≈-0.89）在后
+  // 避免跖骨宽范围吞噬跗骨命中
 
-  // 距骨（Y ≈ -0.82, X ≈ 0.28，排除跖骨 X 范围）
-  if (y > -0.95 && y < -0.70 && absX > 0.25 && absX < 0.30) return `talus_${hand}`
+  // 距骨：高位顶点 Y > -0.70 用宽 X，低位顶点 Y ≤ -0.70 用窄 X 避免吞跗骨
+  if (y > -0.70 && y < -0.64 && absX > 0.30 && absX < 0.42) return `talus_${hand}`
+  if (y >= -0.85 && y <= -0.70 && absX > 0.25 && absX < 0.30) return `talus_${hand}`
 
-  // 跗骨区域（Y ≈ -0.82）：navicular, cuboid, cuneiforms
-  if (y > -0.88 && y < -0.76 && absX > 0.25 && absX < 0.42) {
+  // 跗骨区域（X+Z 距离匹配，Z 权重 0.3 辅助区分深层顶点）
+  if (y >= -0.85 && y < -0.76 && absX > 0.25 && absX < 0.42) {
     const tarsalBones = [
       { id: `cuneiform_med_${hand}`, x: 0.38 },
       { id: `navicular_${hand}`, x: 0.35 },
@@ -317,10 +323,23 @@ function findFootBone(worldPoint) {
     ]
     let bestBone = null, bestDist = Infinity
     for (const b of tarsalBones) {
-      const d = Math.abs(absX - b.x)
+      const bp = bonePositions[b.id]
+      const dx = absX - b.x
+      const dz = bp ? (worldPoint.z - bp.p[2]) * 0.3 : 0
+      const d = Math.sqrt(dx * dx + dz * dz)
       if (d < bestDist) { bestDist = d; bestBone = b.id }
     }
     return bestBone
+  }
+
+  // 跖骨区域（上界 ≤ -0.84 含等号，避免边界间隙导致顶点漏到全局匹配）
+  if (y > -0.93 && y <= -0.84) {
+    let bestRay = null, bestRayDist = Infinity
+    for (const ray of footRays) {
+      const d = Math.abs(absX - ray.x)
+      if (d < bestRayDist) { bestRayDist = d; bestRay = ray }
+    }
+    if (bestRay && bestRayDist < 0.06) return `${bestRay.mc}_${hand}`
   }
 
   return null

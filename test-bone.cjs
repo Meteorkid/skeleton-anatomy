@@ -110,8 +110,9 @@ async function main() {
     return results
   }, BONES)
 
-  // 测试 2: v2 mesh 顶点法
-  const v2Results = await page.evaluate((boneIds) => {
+  // 测试 2: v2 mesh 顶点法（best-of-K + knownFinger）
+  const K = 10
+  const v2Results = await page.evaluate(({ boneIds, K }) => {
     const THREE = window.__debugTHREE
     const group = window.__debugGLBGroup
     const meshes = []
@@ -126,51 +127,220 @@ async function main() {
       worldVerts.push({ x: v.x, y: v.y, z: v.z })
     }
     const bonePositions = window.__debugBonePositions
+
+    const boneLookup = Object.entries(bonePositions).map(([id2, b]) => ({
+      id: id2, px: b.p[0], py: b.p[1], pz: b.p[2],
+      size: Array.isArray(b.s) ? Math.max(...b.s) : b.s,
+    }))
+
+    // 从骨骼 ID 提取手指名（如 pp_thumb_r → thumb）
+    const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky']
+    function getFingerName(boneId) {
+      for (const f of FINGER_NAMES) {
+        if (boneId.includes('_' + f + '_')) return f
+      }
+      return null
+    }
+
     const results = []
     for (const id of boneIds) {
       const bp = bonePositions[id]
       if (!bp) { results.push({ id, detected: 'NO_POS', pass: false }); continue }
-      let bestVert = null, bestVDist = Infinity
+
+      // 找 K 个最近顶点
+      const nearest = []
       for (const vt of worldVerts) {
         const dx = vt.x - bp.p[0], dy = vt.y - bp.p[1], dz = vt.z - bp.p[2]
         const d = Math.sqrt(dx*dx + dy*dy + dz*dz)
-        if (d < bestVDist) { bestVDist = d; bestVert = vt }
+        if (nearest.length < K || d < nearest[nearest.length - 1].dist) {
+          nearest.push({ x: vt.x, y: vt.y, z: vt.z, dist: d })
+          nearest.sort((a, b) => a.dist - b.dist)
+          if (nearest.length > K) nearest.length = K
+        }
       }
-      if (!bestVert || bestVDist > 0.5) { results.push({ id, detected: 'NO_VERTEX', pass: false }); continue }
-      const clickPoint = new THREE.Vector3(bestVert.x, bestVert.y, bestVert.z)
-      const fingerBone = window.__findFingerBone(clickPoint, null)
-      let detected = fingerBone
-      if (!detected) {
+
+      if (nearest.length === 0 || nearest[0].dist > 0.5) {
+        results.push({ id, detected: 'NO_VERTEX', pass: false, vDist: '0.000', bestK: 0 })
+        continue
+      }
+
+      // 预判已知手指（模拟 face-to-finger map）
+      const knownFinger = getFingerName(id)
+
+      let bestResult = null
+      for (const vt of nearest) {
+        const clickPoint = new THREE.Vector3(vt.x, vt.y, vt.z)
+        const fingerBone = window.__findFingerBone(clickPoint, knownFinger)
+        let detected = fingerBone
+        if (!detected) {
+          const footBone = window.__findFootBone(clickPoint)
+          if (footBone) detected = footBone
+        }
+        if (!detected) {
+          let best = null, bestDist = Infinity
+          let second = null, secondDist = Infinity, secondSize = 0
+          for (const b of boneLookup) {
+            const dx = clickPoint.x - b.px, dy = clickPoint.y - b.py, dz = clickPoint.z - b.pz
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz)
+            const threshold = Math.max(b.size * 2.5, 0.15)
+            if (dist < threshold) {
+              if (dist < bestDist) {
+                secondDist = bestDist; second = best; secondSize = best ? best.size : 0
+                bestDist = dist; best = b
+              } else if (dist < secondDist) {
+                secondDist = dist; second = b; secondSize = b.size
+              }
+            }
+          }
+          if (best && second && secondDist - bestDist < 0.04 && secondSize < best.size * 0.5) best = second
+          detected = best ? best.id : 'NONE'
+        }
+        const pass = detected === id
+        if (!bestResult || (pass && !bestResult.pass)) {
+          bestResult = { id, detected, pass, vDist: vt.dist.toFixed(3), bestK: nearest.indexOf(vt) + 1 }
+        }
+        if (pass) break
+      }
+
+      results.push(bestResult)
+    }
+    return results
+  }, { boneIds: BONES, K })
+
+  // 增强诊断：对 v2 失败的骨骼，分析最近顶点为何误检
+  const v2fDiag = v2Results.filter(r => !r.pass).map(r => r.id)
+  if (v2fDiag.length > 0) {
+    const diagResults = await page.evaluate(({ boneIds }) => {
+      const THREE = window.__debugTHREE
+      const group = window.__debugGLBGroup
+      const meshes = []
+      group.traverse(c => { if (c.isMesh) meshes.push(c) })
+      const mesh = meshes[0]
+      const pos = mesh.geometry.attributes.position
+      const wm = mesh.matrixWorld
+      const v = new THREE.Vector3()
+      const worldVerts = []
+      for (let i = 0; i < pos.count; i++) {
+        v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(wm)
+        worldVerts.push({ x: v.x, y: v.y, z: v.z })
+      }
+      const bonePositions = window.__debugBonePositions
+      const boneLookup = Object.entries(bonePositions).map(([id2, b]) => ({
+        id: id2, px: b.p[0], py: b.p[1], pz: b.p[2],
+        size: Array.isArray(b.s) ? Math.max(...b.s) : b.s,
+      }))
+
+      const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky']
+      function getFingerName(boneId) {
+        for (const f of FINGER_NAMES) {
+          if (boneId.includes('_' + f + '_')) return f
+        }
+        return null
+      }
+
+      // 检测一条路径
+      function detectOne(clickPoint, knownFinger) {
+        const fingerBone = window.__findFingerBone(clickPoint, knownFinger)
+        if (fingerBone) return { detected: fingerBone, path: 'finger' }
         const footBone = window.__findFootBone(clickPoint)
-        if (footBone) detected = footBone
-      }
-      if (!detected) {
-        const bones = Object.entries(bonePositions).map(([id2, b]) => ({
-          id: id2, px: b.p[0], py: b.p[1], pz: b.p[2],
-          size: Array.isArray(b.s) ? Math.max(...b.s) : b.s,
-        }))
+        if (footBone) return { detected: footBone, path: 'foot' }
         let best = null, bestDist = Infinity
         let second = null, secondDist = Infinity, secondSize = 0
-        for (const b of bones) {
-          const dx = clickPoint.x - b.px, dy = clickPoint.y - b.py, dz = clickPoint.z - b.pz
-          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz)
+        for (const b of boneLookup) {
+          const dx2 = clickPoint.x - b.px, dy2 = clickPoint.y - b.py, dz2 = clickPoint.z - b.pz
+          const dist2 = Math.sqrt(dx2*dx2 + dy2*dy2 + dz2*dz2)
           const threshold = Math.max(b.size * 2.5, 0.15)
-          if (dist < threshold) {
-            if (dist < bestDist) {
+          if (dist2 < threshold) {
+            if (dist2 < bestDist) {
               secondDist = bestDist; second = best; secondSize = best ? best.size : 0
-              bestDist = dist; best = b
-            } else if (dist < secondDist) {
-              secondDist = dist; second = b; secondSize = b.size
+              bestDist = dist2; best = b
+            } else if (dist2 < secondDist) {
+              secondDist = dist2; second = b; secondSize = b.size
             }
           }
         }
         if (best && second && secondDist - bestDist < 0.04 && secondSize < best.size * 0.5) best = second
-        detected = best ? best.id : 'NONE'
+        return { detected: best ? best.id : 'NONE', path: 'global' }
       }
-      results.push({ id, detected, pass: detected === id, vDist: bestVDist.toFixed(3) })
+
+      const results = []
+      for (const id of boneIds) {
+        const bp = bonePositions[id]
+        if (!bp) { results.push({ id, status: 'NO_POS' }); continue }
+
+        const searchRadius = 0.6
+        const correctVerts = []
+        const nearVerts = [] // 5 个最近顶点及检测结果
+        let closestVDist = Infinity
+
+        for (const vt of worldVerts) {
+          const dx = vt.x - bp.p[0], dy = vt.y - bp.p[1], dz = vt.z - bp.p[2]
+          const d = Math.sqrt(dx*dx + dy*dy + dz*dz)
+          if (d > searchRadius) continue
+          if (d < closestVDist) closestVDist = d
+
+          const knownFinger = getFingerName(id)
+          const result = detectOne(new THREE.Vector3(vt.x, vt.y, vt.z), knownFinger)
+
+          // 记录 5 个最近顶点
+          if (nearVerts.length < 5 || d < nearVerts[nearVerts.length - 1].d) {
+            nearVerts.push({ x: vt.x, y: vt.y, z: vt.z, d, detected: result.detected, path: result.path })
+            nearVerts.sort((a, b) => a.d - b.d)
+            if (nearVerts.length > 5) nearVerts.length = 5
+          }
+
+          if (result.detected === id) {
+            correctVerts.push({ x: vt.x, y: vt.y, z: vt.z, d })
+          }
+        }
+
+        if (correctVerts.length > 0) {
+          const best = correctVerts.sort((a, b) => a.d - b.d).slice(0, 10)
+          const cx = best.reduce((s, v) => s + v.x, 0) / best.length
+          const cy = best.reduce((s, v) => s + v.y, 0) / best.length
+          const cz = best.reduce((s, v) => s + v.z, 0) / best.length
+          const vx = best.reduce((s, v) => s + (v.x - cx)**2, 0) / best.length
+          const vy = best.reduce((s, v) => s + (v.y - cy)**2, 0) / best.length
+          const vz = best.reduce((s, v) => s + (v.z - cz)**2, 0) / best.length
+          results.push({
+            id, status: 'FOUND', count: correctVerts.length,
+            oldPos: [bp.p[0].toFixed(4), bp.p[1].toFixed(4), bp.p[2].toFixed(4)],
+            newPos: [cx.toFixed(4), cy.toFixed(4), cz.toFixed(4)],
+            spread: [Math.sqrt(vx).toFixed(4), Math.sqrt(vy).toFixed(4), Math.sqrt(vz).toFixed(4)],
+            bestVDist: closestVDist.toFixed(3),
+            nearVerts: nearVerts.map(nv => ({
+              x: nv.x.toFixed(3), y: nv.y.toFixed(3), z: nv.z.toFixed(3),
+              d: nv.d.toFixed(3), detected: nv.detected, path: nv.path
+            })),
+            suggestedLine: `pos.${id} = { p: [${cx.toFixed(4)}, ${cy.toFixed(4)}, ${cz.toFixed(4)}], s: ${JSON.stringify(bp.s)} }`,
+          })
+        } else {
+          results.push({
+            id, status: 'NO_CORRECT_VERT', bestVDist: closestVDist.toFixed(3), searchRadius,
+            nearVerts: nearVerts.map(nv => ({
+              x: nv.x.toFixed(3), y: nv.y.toFixed(3), z: nv.z.toFixed(3),
+              d: nv.d.toFixed(3), detected: nv.detected, path: nv.path
+            })),
+          })
+        }
+      }
+      return results
+    }, { boneIds: v2fDiag })
+
+    console.log('\n===== 增强诊断：v2 失败骨骼 =====')
+    for (const r of diagResults) {
+      console.log(`\n--- ${r.id} (${r.status}, bestVDist=${r.bestVDist}) ---`)
+      console.log(`  骨骼中心: [${r.oldPos ? r.oldPos.join(', ') : 'N/A'}]`)
+      console.log('  最近5个顶点 → 检测结果:')
+      for (const nv of r.nearVerts) {
+        console.log(`    d=${nv.d} [${nv.x}, ${nv.y}, ${nv.z}] → ${nv.detected} (${nv.path})`)
+      }
+      if (r.status === 'FOUND') {
+        console.log(`  正确顶点数: ${r.count}, 建议位置: [${r.newPos.join(', ')}]`)
+        console.log(`  ${r.suggestedLine}`)
+      }
     }
-    return results
-  }, BONES)
+  }
 
   await browser.close()
 
@@ -187,8 +357,14 @@ async function main() {
   // 输出 v2 结果
   const v2p = v2Results.filter(r => r.pass).length
   const v2f = v2Results.filter(r => !r.pass)
-  console.log(`\n===== v2 mesh顶点法 =====`)
+  console.log(`\n===== v2 mesh顶点法（best-of-${K}）=====`)
   console.log(`总计: ${v2Results.length} | 通过: ${v2p} | 失败: ${v2f.length} | 通过率: ${(v2p/v2Results.length*100).toFixed(1)}%`)
+  // 统计各 bestK 层级的贡献
+  for (let k = 1; k <= K; k++) {
+    const passedAtK = v2Results.filter(r => r.pass && r.bestK === k).length
+    const totalAtK = v2Results.filter(r => r.pass && r.bestK <= k).length
+    if (passedAtK > 0) console.log(`  第${k}近顶点首次命中: ${passedAtK} 块 (累计 ${totalAtK})`)
+  }
   if (v2f.length > 0) {
     // 按区域分类
     const foot = v2f.filter(f => f.id.match(/(toe|mt|cuneiform|talus|calcaneus|navicular|cuboid)/))

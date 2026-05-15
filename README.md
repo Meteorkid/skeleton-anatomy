@@ -14,6 +14,16 @@ Human Skeleton 3D Atlas — 交互式人体骨骼解剖学习应用
 - **主题切换**：暗色 / 亮色模式
 - **程序化渲染**：无需外部 3D 模型文件，所有骨骼由代码生成
 
+## 截图
+
+### 骨骼列表主页
+
+![骨骼列表主页](docs/screenshots/skeleton-anatomy-main.png)
+
+### 骨骼详情面板
+
+![骨骼详情面板](docs/screenshots/skeleton-anatomy-detail.png)
+
 ## 技术栈
 
 | 层 | 技术 |
